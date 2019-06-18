@@ -15,10 +15,12 @@ def run_test(ctc_type, data_path):
         inp = inp.cuda().detach()
         inp_len = inp_len.cuda()
     elif ctc_type == 'plain_cuda':
-        inp = inp.cuda().detach()
+        inp = inp.double().cuda().detach()
         inp_len = inp_len.long().cuda()
         tar = tar.long().cuda()
         tar_len = tar_len.long().cuda()
+    else:
+        inp = inp.double().detach()
 
     assert bool(torch.all((inp.exp().sum(dim=-1) - 1).abs() < 1e-5).item())
     inp.requires_grad = True
