@@ -34,6 +34,7 @@ def run_test(ctc_type, data_path, zero_inf):
     grad_sum = inp.grad.sum()
     grad_abs_sum = inp.grad.abs().sum()
     print(f'{ctc_type:11} '
+          f'tar_len: {tar_len.tolist()}  '
           f'loss:  {loss[0].item():.10f}, {loss[1].item():.10f}  '
           f'grad_sum: {grad_sum.item():.10f}  '
           f'grad_abs_sum: {grad_abs_sum.item():.10f}')
