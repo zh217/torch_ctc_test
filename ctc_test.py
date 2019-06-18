@@ -29,7 +29,7 @@ def run_test(ctc_type, data_path, zero_inf):
 
     loss = loss_fn(inp, tar, inp_len, tar_len)
 
-    loss.sum().backward()
+    loss[-1].backward()
 
     grad_sum = inp.grad.sum()
     grad_abs_sum = inp.grad.abs().sum()
