@@ -43,7 +43,7 @@ if __name__ == '__main__':
     print('python version:', sys.version)
     print('torch version:', torch.__version__)
     print('GPU:', torch.cuda.get_device_name())
-    for i in range(2):
+    for i in range(3):
         data_path = f'ctc_test_data_{i}.pt'
         print()
         print(f'[{data_path}]')
