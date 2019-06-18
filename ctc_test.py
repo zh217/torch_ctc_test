@@ -50,5 +50,5 @@ if __name__ == '__main__':
         for zero_inf in [True, False]:
             print(f'[{data_path}] zero_inf={zero_inf}')
             run_test('cpu', data_path, zero_inf)
-            run_test('plain_cuda', data_path, zero_inf)
             run_test('cudnn', data_path, zero_inf)
+            run_test('plain_cuda', data_path, zero_inf)
