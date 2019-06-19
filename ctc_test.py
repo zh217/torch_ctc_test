@@ -1,17 +1,40 @@
 import sys
+import argparse
 
 import torch
 import torch.nn
 
 
-def run_test(ctc_type, data_path, zero_inf):
+def load_data(data_path, max_n, beta):
     test_data = torch.load(data_path)
     inp = test_data['inp']
     inp_len = torch.tensor((inp.size(0),) * inp.size(1), dtype=torch.int32)
     tar = test_data['tar']
     tar_len = test_data['tar_len']
+    if max_n:
+        inp[:, :, max_n - 1] = inp[:, :, max_n:].logsumexp(-1)
+        inp = inp[:, :, :max_n]
+        tar = tar.clamp(max=max_n - 1)
 
-    if ctc_type == 'cudnn':
+    if beta:
+        inp = inp / beta
+
+    inp = inp.log_softmax(-1)
+
+    print(f'loaded {data_path}')
+    print(f'inp.shape: {list(inp.shape)}')
+    print(f'tar.shape: {list(tar.shape)}')
+    print(f'inp_len: {inp_len.tolist()}')
+    print(f'tar_len: {tar_len.tolist()}')
+    print(f'max(inp) - min(inp): {inp.max() - inp.min()}')
+    return {'inp': inp,
+            'tar': tar,
+            'inp_len': inp_len,
+            'tar_len': tar_len}
+
+
+def run_test(ctc_type, reduction, inp, tar, inp_len, tar_len):
+    if ctc_type == 'cudnn' or ctc_type == 'cudnn_det':
         inp = inp.cuda().detach()
         inp_len = inp_len.cuda()
     elif ctc_type == 'plain_cuda':
@@ -22,33 +45,46 @@ def run_test(ctc_type, data_path, zero_inf):
     else:
         inp = inp.double().detach()
 
-    assert bool(torch.all((inp.exp().sum(dim=-1) - 1).abs() < 1e-5).item())
     inp.requires_grad = True
 
-    loss_fn = torch.nn.CTCLoss(reduction='none', zero_infinity=zero_inf)
+    if ctc_type == 'cudnn_det':
+        torch.backends.cudnn.deterministic = True
+    else:
+        torch.backends.cudnn.deterministic = False
+
+    loss_fn = torch.nn.CTCLoss(reduction='none')
 
     loss = loss_fn(inp, tar, inp_len, tar_len)
 
-    loss[-1].backward()
+    if reduction == 'sum':
+        loss.sum().backward()
+    elif reduction == 'min':
+        loss.min().backward()
 
     grad_sum = inp.grad.sum()
     grad_abs_sum = inp.grad.abs().sum()
     print(f'{ctc_type:11} '
-          f'tar_len: {tar_len.tolist()}  '
           f'loss:  {loss[0].item():.10f}, {loss[1].item():.10f}  '
           f'grad_sum: {grad_sum.item():.10f}  '
           f'grad_abs_sum: {grad_abs_sum.item():.10f}')
 
 
+parser = argparse.ArgumentParser(description='Test pytorch\'s CTC implementations')
+parser.add_argument('data')
+parser.add_argument('--n-class', type=int)
+parser.add_argument('--beta', type=float)
+parser.add_argument('--backward-reduction', default='sum')
+
 if __name__ == '__main__':
+    args = parser.parse_args()
+
     print('python version:', sys.version)
     print('torch version:', torch.__version__)
     print('GPU:', torch.cuda.get_device_name())
-    for i in range(4):
-        data_path = f'ctc_test_data_{i}.pt'
-        print()
-        for zero_inf in [True, False]:
-            print(f'[{data_path}] zero_inf={zero_inf}')
-            run_test('cpu', data_path, zero_inf)
-            run_test('cudnn', data_path, zero_inf)
-            run_test('plain_cuda', data_path, zero_inf)
+
+    data = load_data(args.data, args.n_class, args.beta)
+
+    print()
+
+    for t in ['cudnn', 'cudnn_det', 'plain_cuda', 'cpu']:
+        run_test(t, args.backward_reduction, **data)
